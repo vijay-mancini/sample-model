@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sample 3D Cube Viewer</title>
+<style>
+:root{--bg:#f4f4f2;--fg:#1c1c1a;--btn:#ffffffcc;--bd:#00000022;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1c1e;--fg:#eee;--btn:#2b2c2fcc;--bd:#ffffff33}}
+:root[data-theme="dark"]{--bg:#1b1c1e;--fg:#eee;--btn:#2b2c2fcc;--bd:#ffffff33}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.bar{position:absolute;left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:8px}
+button{background:var(--btn);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer;backdrop-filter:blur(6px)}
+.hint{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:12px;opacity:.7}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hint">Drag to rotate · scroll / pinch to zoom</div>
+<div class="bar">
+  <button id="spin">Auto-rotate: on</button>
+  <button id="reset">Reset view</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  var canvas=document.getElementById('c');
+  var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  var scene=new THREE.Scene();
+  var camera=new THREE.PerspectiveCamera(45,1,0.1,100);
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.6));
+  var dl=new THREE.DirectionalLight(0xffffff,0.9);dl.position.set(4,6,5);scene.add(dl);
+
+  var geo=new THREE.BoxGeometry(2,2,2);
+  var mats=[0xe4572e,0x29b6a0,0x4b7bec,0xf5b700,0x9b5de5,0x7cc36e].map(function(c){
+    return new THREE.MeshStandardMaterial({color:c,roughness:0.5,metalness:0.05});
+  });
+  var cube=new THREE.Mesh(geo,mats);scene.add(cube);
+  cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x111111})));
+  var grid=new THREE.GridHelper(10,10,0x888888,0x888888);grid.position.y=-1.2;
+  grid.material.opacity=0.35;grid.material.transparent=true;scene.add(grid);
+
+  var DEF={yaw:0.7,pitch:0.45,dist:7};
+  var s={yaw:DEF.yaw,pitch:DEF.pitch,dist:DEF.dist},auto=true;
+
+  function place(){
+    camera.position.set(
+      s.dist*Math.cos(s.pitch)*Math.sin(s.yaw),
+      s.dist*Math.sin(s.pitch),
+      s.dist*Math.cos(s.pitch)*Math.cos(s.yaw));
+    camera.lookAt(0,0,0);
+  }
+  function resize(){
+    var w=canvas.clientWidth,h=canvas.clientHeight;
+    renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+  }
+  addEventListener('resize',resize);
+
+  var ptrs={},lastPinch=0;
+  canvas.addEventListener('pointerdown',function(e){canvas.setPointerCapture(e.pointerId);ptrs[e.pointerId]={x:e.clientX,y:e.clientY};});
+  canvas.addEventListener('pointerup',function(e){delete ptrs[e.pointerId];lastPinch=0;});
+  canvas.addEventListener('pointercancel',function(e){delete ptrs[e.pointerId];lastPinch=0;});
+  canvas.addEventListener('pointermove',function(e){
+    var p=ptrs[e.pointerId];if(!p)return;
+    var ids=Object.keys(ptrs);
+    if(ids.length===1){
+      s.yaw-=(e.clientX-p.x)*0.008;
+      s.pitch=Math.max(-1.4,Math.min(1.4,s.pitch+(e.clientY-p.y)*0.008));
+    }
+    p.x=e.clientX;p.y=e.clientY;
+    if(ids.length===2){
+      var a=ptrs[ids[0]],b=ptrs[ids[1]],d=Math.hypot(a.x-b.x,a.y-b.y);
+      if(lastPinch)s.dist=Math.max(3,Math.min(20,s.dist*lastPinch/d));
+      lastPinch=d;
+    }
+  });
+  canvas.addEventListener('wheel',function(e){
+    e.preventDefault();s.dist=Math.max(3,Math.min(20,s.dist*(1+e.deltaY*0.001)));
+  },{passive:false});
+
+  var spin=document.getElementById('spin');
+  spin.onclick=function(){auto=!auto;spin.textContent='Auto-rotate: '+(auto?'on':'off');};
+  document.getElementById('reset').onclick=function(){s.yaw=DEF.yaw;s.pitch=DEF.pitch;s.dist=DEF.dist;};
+
+  function loop(){
+    if(auto&&!Object.keys(ptrs).length)s.yaw+=0.004;
+    place();renderer.render(scene,camera);requestAnimationFrame(loop);
+  }
+  resize();loop();
+})();
+</script>
+</body>
+</html>
